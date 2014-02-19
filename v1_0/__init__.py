@@ -14,4 +14,4 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from lbaasclient.v1_0.client import Client   # noqa
+from lbaasclient.v1_0.client import Client   # lbaas

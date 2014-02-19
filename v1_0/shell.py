@@ -33,23 +33,8 @@ from lbaasclient import exceptions
 from lbaasclient.openstack.common import strutils
 from lbaasclient.openstack.common import timeutils
 from lbaasclient import utils
-from lbaasclient.v1_0 import availability_zones
 from lbaasclient.v1_0 import quotas
 from lbaasclient.v1_0 import loadbalancers
-
-
-CLIENT_BDM2_KEYS = {
-    'id': 'uuid',
-    'source': 'source_type',
-    'dest': 'destination_type',
-    'bus': 'disk_bus',
-    'device': 'device_name',
-    'size': 'volume_size',
-    'format': 'guest_format',
-    'bootindex': 'boot_index',
-    'type': 'device_type',
-    'shutdown': 'delete_on_termination',
-}
 
 
 def _key_value_pairing(text):
@@ -61,80 +46,14 @@ def _key_value_pairing(text):
         raise argparse.ArgumentTypeError(msg)
 
 
-def _match_image(cs, wanted_properties):
-    image_list = cs.images.list()
-    images_matched = []
-    match = set(wanted_properties)
-    for img in image_list:
-        try:
-            if match == match.intersection(set(img.metadata.items())):
-                images_matched.append(img)
-        except AttributeError:
-            pass
-    return images_matched
-
-
-def _parse_block_device_mapping_v2(args, image):
-    bdm = []
-
-    if args.boot_volume:
-        bdm_dict = {'uuid': args.boot_volume, 'source_type': 'volume',
-                    'destination_type': 'volume', 'boot_index': 0,
-                    'delete_on_termination': False}
-        bdm.append(bdm_dict)
-
-    if args.snapshot:
-        bdm_dict = {'uuid': args.snapshot, 'source_type': 'snapshot',
-                    'destination_type': 'volume', 'boot_index': 0,
-                    'delete_on_termination': False}
-        bdm.append(bdm_dict)
-
-    for device_spec in args.block_device:
-        spec_dict = dict(v.split('=') for v in device_spec.split(','))
-        bdm_dict = {}
-
-        for key, value in six.iteritems(spec_dict):
-            bdm_dict[CLIENT_BDM2_KEYS[key]] = value
-
-        # Convert the delete_on_termination to a boolean or set it to true by
-        # default for local block devices when not specified.
-        if 'delete_on_termination' in bdm_dict:
-            action = bdm_dict['delete_on_termination']
-            bdm_dict['delete_on_termination'] = (action == 'remove')
-        elif bdm_dict.get('destination_type') == 'local':
-            bdm_dict['delete_on_termination'] = True
-
-        bdm.append(bdm_dict)
-
-    for ephemeral_spec in args.ephemeral:
-        bdm_dict = {'source_type': 'blank', 'destination_type': 'local',
-                    'boot_index': -1, 'delete_on_termination': True}
-
-        eph_dict = dict(v.split('=') for v in ephemeral_spec.split(','))
-        if 'size' in eph_dict:
-            bdm_dict['volume_size'] = eph_dict['size']
-        if 'format' in eph_dict:
-            bdm_dict['guest_format'] = eph_dict['format']
-
-        bdm.append(bdm_dict)
-
-    if args.swap:
-        bdm_dict = {'source_type': 'blank', 'destination_type': 'local',
-                    'boot_index': -1, 'delete_on_termination': True,
-                    'guest_format': 'swap', 'volume_size': args.swap}
-        bdm.append(bdm_dict)
-
-    return bdm
-
-
 def _create(cs, args):
     """Create a new loadbalancer."""
-    print(args)
+    #print(args)
     if not args.name:
         raise exceptions.CommandError("you need to specify a name")
 
     boot_args = [args.name, args.protocol, args.vip_type]
-    print(boot_args)
+    #print(boot_args)
 
     boot_kwargs = dict(
             port=args.port,
@@ -248,74 +167,6 @@ def _translate_keys(collection, convert):
                 setattr(item, to_key, item._info[from_key])
 
 
-def _translate_extended_states(collection):
-    power_states = [
-        'NOSTATE',      # 0x00
-        'Running',      # 0x01
-        '',             # 0x02
-        'Paused',       # 0x03
-        'Shutdown',     # 0x04
-        '',             # 0x05
-        'Crashed',      # 0x06
-        'Suspended'     # 0x07
-    ]
-
-    for item in collection:
-        try:
-            setattr(item, 'power_state',
-                power_states[getattr(item, 'power_state')]
-            )
-        except AttributeError:
-            setattr(item, 'power_state', "N/A")
-        try:
-            getattr(item, 'task_state')
-        except AttributeError:
-            setattr(item, 'task_state', "N/A")
-
-
-def _print_flavor_list(flavors, show_extra_specs=False):
-    _translate_flavor_keys(flavors)
-
-    headers = [
-        'ID',
-        'Name',
-        'Memory_MB',
-        'Disk',
-        'Ephemeral',
-        'Swap',
-        'VCPUs',
-        'RXTX_Factor',
-        'Is_Public',
-    ]
-
-    if show_extra_specs:
-        formatters = {'extra_specs': _print_flavor_extra_specs}
-        headers.append('extra_specs')
-    else:
-        formatters = {}
-
-    utils.print_list(flavors, headers, formatters)
-
-
-@utils.arg('--extra-specs',
-           dest='extra_specs',
-           action='store_true',
-           default=False,
-           help='Get extra-specs of each flavor.')
-@utils.arg('--all',
-           dest='all',
-           action='store_true',
-           default=False,
-           help='Display all flavors (Admin only).')
-def do_flavor_list(cs, args):
-    """Print a list of available 'flavors' (sizes of loadbalancers)."""
-    if args.all:
-        flavors = cs.flavors.list(is_public=None)
-    else:
-        flavors = cs.flavors.list()
-    _print_flavor_list(flavors, args.extra_specs)
-
-
 @utils.arg('project_id', metavar='<project_id>',
            help='The ID of the project.')
 def do_scrub(cs, args):
@@ -346,39 +197,6 @@ def _extract_metadata(args):
 
         metadata[key] = value
     return metadata
-
-
-def _print_image(image):
-    info = image._info.copy()
-
-    # ignore links, we don't need to present those
-    info.pop('links')
-
-    # try to replace a server entity to just an id
-    server = info.pop('server', None)
-    try:
-        info['server'] = server['id']
-    except (KeyError, TypeError):
-        pass
-
-    # break up metadata and display each on its own row
-    metadata = info.pop('metadata', {})
-    try:
-        for key, value in metadata.items():
-            _key = 'metadata %s' % key
-            info[_key] = value
-    except AttributeError:
-        pass
-
-    utils.print_dict(info)
-
-
-def _print_flavor(flavor):
-    info = flavor._info.copy()
-    # ignore links, we don't need to present those
-    info.pop('links')
-    info.update({"extra_specs": _print_flavor_extra_specs(flavor)})
-    utils.print_dict(info)
 
 
 @utils.arg('--name',
@@ -430,7 +248,6 @@ def do_list(cs, args):
     convert = [('OS-EXT-SRV-ATTR:host', 'host'),
                ('hostId', 'host_id')]
     _translate_keys(loadbalancers, convert)
-    _translate_extended_states(loadbalancers)
 
     if field_titles:
         columns = [id_col] + field_titles
@@ -458,7 +275,7 @@ def _print_server(cs, args):
 
     networks = server.networks
     info = server._info.copy()
-    print(info)
+    #print(info)
     for network_label, address_list in networks.items():
         info['%s network' % network_label] = ', '.join(address_list)
 
@@ -495,113 +312,6 @@ def do_delete(cs, args):
 def _find_server(cs, server):
     """Get a server by name or ID."""
     return utils.find_resource(cs.loadbalancers, server)
-
-
-def _find_image(cs, image):
-    """Get an image by name or ID."""
-    return utils.find_resource(cs.images, image)
-
-
-def _find_flavor_for_admin(cs, flavor):
-    """Get a flavor for administrator by name, ID, or RAM size."""
-    try:
-        return utils.find_resource(cs.flavors, flavor, is_public=None)
-    except exceptions.NotFound:
-        return cs.flavors.find(ram=flavor)
-
-
-def _find_flavor(cs, flavor):
-    """Get a flavor by name, ID, or RAM size."""
-    try:
-        return utils.find_resource(cs.flavors, flavor)
-    except exceptions.NotFound:
-        return cs.flavors.find(ram=flavor)
-
-
-def _find_volume(cs, volume):
-    """Get a volume by name or ID."""
-    return utils.find_resource(cs.volumes, volume)
-
-
-def _find_volume_snapshot(cs, snapshot):
-    """Get a volume snapshot by name or ID."""
-    return utils.find_resource(cs.volume_snapshots, snapshot)
-
-
-def _print_volume(volume):
-    utils.print_dict(volume._info)
-
-
-def _print_volume_snapshot(snapshot):
-    utils.print_dict(snapshot._info)
-
-
-def _translate_volume_keys(collection):
-    _translate_keys(collection,
-                    [('displayName', 'display_name'),
-                     ('volumeType', 'volume_type')])
-
-
-def _translate_volume_snapshot_keys(collection):
-    _translate_keys(collection,
-                    [('displayName', 'display_name'),
-                     ('volumeId', 'volume_id')])
-
-
-def _translate_availability_zone_keys(collection):
-    _translate_keys(collection,
-                    [('zoneName', 'name'), ('zoneState', 'status')])
-
-
-def _print_secgroup_rules(rules):
-    class FormattedRule:
-        def __init__(self, obj):
-            items = (obj if isinstance(obj, dict) else obj._info).items()
-            for k, v in items:
-                if k == 'ip_range':
-                    v = v.get('cidr')
-                elif k == 'group':
-                    k = 'source_group'
-                    v = v.get('name')
-                if v is None:
-                    v = ''
-
-                setattr(self, k, v)
-
-    rules = [FormattedRule(rule) for rule in rules]
-    utils.print_list(rules, ['IP Protocol', 'From Port', 'To Port',
-                             'IP Range', 'Source Group'])
-
-
-def _print_secgroups(secgroups):
-    utils.print_list(secgroups, ['Id', 'Name', 'Description'])
-
-
-def _get_secgroup(cs, secgroup):
-    # Check secgroup is an ID
-    if utils.is_integer_like(strutils.safe_encode(secgroup)):
-        try:
-            return cs.security_groups.get(secgroup)
-        except exceptions.NotFound:
-            pass
-
-    # Check secgroup as a name
-    match_found = False
-    for s in cs.security_groups.list():
-        encoding = (locale.getpreferredencoding() or
-            sys.stdin.encoding or
-            'UTF-8')
-        s.name = s.name.encode(encoding)
-        if secgroup == s.name:
-            if match_found != False:
-                msg = ("Multiple security group matches found for name"
-                       " '%s', use an ID to be more specific." % secgroup)
-                raise exceptions.NoUniqueMatch(msg)
-            match_found = s
-    if match_found is False:
-        raise exceptions.CommandError("Secgroup ID or name '%s' not found."
-                                      % secgroup)
-    return match_found
 
 
 @utils.arg('--tenant',
@@ -1072,19 +782,4 @@ def do_quota_class_update(cs, args):
     """Update the quotas for a quota class."""
 
     _quota_update(cs.quota_classes, args.class_name, args)
-
-
-def _print_interfaces(interfaces):
-    columns = ['Port State', 'Port ID', 'Net ID', 'IP addresses',
-               'MAC Addr']
-
-    class FormattedInterface(object):
-        def __init__(self, interface):
-            for col in columns:
-                key = col.lower().replace(" ", "_")
-                if hasattr(interface, key):
-                    setattr(self, key, getattr(interface, key))
-            self.ip_addresses = ",".join([fip['ip_address']
-                                          for fip in interface.fixed_ips])
-    utils.print_list([FormattedInterface(i) for i in interfaces], columns)
 

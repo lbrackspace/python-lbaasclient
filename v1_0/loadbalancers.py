@@ -24,7 +24,6 @@ import six
 from lbaasclient import base
 from lbaasclient import crypto
 from lbaasclient.openstack.common.py3kcompat import urlutils
-from lbaasclient.v1_0.security_groups import SecurityGroup
 
 
 class Loadbalancer(base.Resource):
