@@ -1,0 +1,10 @@
+#!/Users/adam6424/IdeaProjects/python-lbaasclient/.venv/bin/python2.7
+# PBR Generated from 'console_scripts'
+
+import sys
+
+from lbaasclient.shell import main
+
+
+if __name__ == "__main__":
+    sys.exit(main())
