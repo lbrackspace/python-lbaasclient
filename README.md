@@ -1,4 +1,4 @@
-python-lbaas
+python-lbaasclient
 ============
 
 Recommended installation instructions:
